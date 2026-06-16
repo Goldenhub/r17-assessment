@@ -16,7 +16,7 @@ function serializeCard(card) {
   return { id: _id, ...rest };
 }
 
-async function deleteCreatorCard(serviceData, options = {}) {
+async function deleteCreatorCard(serviceData) {
   const { slug } = serviceData;
 
   validator.validate(serviceData, parsedSpec);

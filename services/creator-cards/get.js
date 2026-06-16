@@ -9,7 +9,7 @@ function serializeCardForRetrieval(card) {
   return { id: _id, ...rest };
 }
 
-async function getCreatorCard(serviceData, options = {}) {
+async function getCreatorCard(serviceData) {
   const { slug, access_code } = serviceData;
   let result;
 

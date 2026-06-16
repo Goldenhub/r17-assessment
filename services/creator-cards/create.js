@@ -53,7 +53,7 @@ function serializeCard(card) {
   return { id: _id, ...rest };
 }
 
-async function createCreatorCard(serviceData, options = {}) {
+async function createCreatorCard(serviceData) {
   const validated = validator.validate(serviceData, parsedSpec);
 
   const {
