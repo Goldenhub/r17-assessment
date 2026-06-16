@@ -18,7 +18,7 @@ const createCardSpec = `root {
     currency string(NGN|USD|GBP|GHS)
     rates[] {
       name string<minlength:3|maxlength:100>
-      description? string<maxlength:250>
+      description string<maxlength:250>
       amount number<min:1>
     }
   }
