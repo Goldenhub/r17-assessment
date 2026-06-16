@@ -1,6 +1,8 @@
 /* eslint-disable camelcase */
 const validator = require('@app-core/validator');
 const { throwAppError } = require('@app-core/errors');
+const { appLogger } = require('@app-core/logger');
+const { CreatorCardMessages } = require('@app/messages');
 const creatorCardRepository = require('@app/repository/creator-card');
 
 const createCardSpec = `root {
@@ -51,8 +53,8 @@ function serializeCard(card) {
   return { id: _id, ...rest };
 }
 
-async function createCreatorCard(data) {
-  const validated = validator.validate(data, parsedSpec);
+async function createCreatorCard(serviceData, options = {}) {
+  const validated = validator.validate(serviceData, parsedSpec);
 
   const {
     title,
@@ -66,86 +68,89 @@ async function createCreatorCard(data) {
     access_code,
   } = validated;
 
-  const effectiveAccessType = access_type || 'public';
+  let result;
 
-  if (effectiveAccessType === 'private' && !access_code) {
-    throwAppError('access_code is required when access_type is private', 'AC01');
-  }
+  try {
+    const effectiveAccessType = access_type || 'public';
 
-  if (effectiveAccessType !== 'private' && access_code) {
-    throwAppError('access_code can only be set on private cards', 'AC05');
-  }
-
-  if (access_code && !ALPHANUMERIC_PATTERN.test(access_code)) {
-    throwAppError('access_code must contain only letters and numbers', 'SPCL_VALIDATION');
-  }
-
-  if (links && links.length > 0) {
-    links.forEach((link) => {
-      if (!link.url.startsWith('http://') && !link.url.startsWith('https://')) {
-        throwAppError('Link URL must start with http:// or https://', 'SPCL_VALIDATION');
-      }
-    });
-  }
-
-  if (service_rates) {
-    service_rates.rates.forEach((rate) => {
-      if (!Number.isInteger(rate.amount)) {
-        throwAppError(
-          'Rate amount must be a positive integer with no decimal places',
-          'SPCL_VALIDATION'
-        );
-      }
-    });
-  }
-
-  let finalSlug;
-
-  if (providedSlug) {
-    if (!SLUG_PATTERN.test(providedSlug)) {
-      throwAppError(
-        'Slug must contain only letters, numbers, hyphens, and underscores',
-        'SPCL_VALIDATION'
-      );
+    if (effectiveAccessType === 'private' && !access_code) {
+      throwAppError(CreatorCardMessages.ACCESS_CODE_REQUIRED_FOR_PRIVATE, 'AC01');
     }
 
-    const existing = await creatorCardRepository.findOne({ query: { slug: providedSlug } });
-    if (existing) {
-      throwAppError('Slug is already taken', 'SL02');
+    if (effectiveAccessType !== 'private' && access_code) {
+      throwAppError(CreatorCardMessages.ACCESS_CODE_NOT_ALLOWED_ON_PUBLIC, 'AC05');
     }
 
-    finalSlug = providedSlug;
-  } else {
-    let generatedSlug = generateSlugFromTitle(title);
+    if (access_code && !ALPHANUMERIC_PATTERN.test(access_code)) {
+      throwAppError(CreatorCardMessages.ACCESS_CODE_MUST_BE_ALPHANUMERIC, 'SPCL_VALIDATION');
+    }
 
-    if (generatedSlug.length < 5) {
-      generatedSlug = `${generatedSlug}-${generateRandomSuffix()}`;
-    } else {
-      const existing = await creatorCardRepository.findOne({ query: { slug: generatedSlug } });
+    if (links && links.length > 0) {
+      links.forEach((link) => {
+        if (!link.url.startsWith('http://') && !link.url.startsWith('https://')) {
+          throwAppError(CreatorCardMessages.INVALID_LINK_URL, 'SPCL_VALIDATION');
+        }
+      });
+    }
+
+    if (service_rates) {
+      service_rates.rates.forEach((rate) => {
+        if (!Number.isInteger(rate.amount)) {
+          throwAppError(CreatorCardMessages.INVALID_RATE_AMOUNT, 'SPCL_VALIDATION');
+        }
+      });
+    }
+
+    let finalSlug;
+
+    if (providedSlug) {
+      if (!SLUG_PATTERN.test(providedSlug)) {
+        throwAppError(CreatorCardMessages.INVALID_SLUG_FORMAT, 'SPCL_VALIDATION');
+      }
+
+      const existing = await creatorCardRepository.findOne({ query: { slug: providedSlug } });
       if (existing) {
-        generatedSlug = `${generatedSlug}-${generateRandomSuffix()}`;
+        throwAppError(CreatorCardMessages.SLUG_TAKEN, 'SL02');
       }
+
+      finalSlug = providedSlug;
+    } else {
+      let generatedSlug = generateSlugFromTitle(title);
+
+      if (generatedSlug.length < 5) {
+        generatedSlug = `${generatedSlug}-${generateRandomSuffix()}`;
+      } else {
+        const existing = await creatorCardRepository.findOne({ query: { slug: generatedSlug } });
+        if (existing) {
+          generatedSlug = `${generatedSlug}-${generateRandomSuffix()}`;
+        }
+      }
+
+      finalSlug = generatedSlug;
     }
 
-    finalSlug = generatedSlug;
+    const cardData = {
+      title,
+      description: description !== undefined ? description : null,
+      slug: finalSlug,
+      creator_reference,
+      links: links || [],
+      service_rates: service_rates || null,
+      status,
+      access_type: effectiveAccessType,
+      access_code: access_code || null,
+      deleted: null,
+    };
+
+    const createdCard = await creatorCardRepository.create(cardData);
+
+    result = serializeCard(createdCard);
+  } catch (error) {
+    appLogger.errorX(error, 'create-creator-card-error');
+    throw error;
   }
 
-  const cardData = {
-    title,
-    description: description !== undefined ? description : null,
-    slug: finalSlug,
-    creator_reference,
-    links: links || [],
-    service_rates: service_rates || null,
-    status,
-    access_type: effectiveAccessType,
-    access_code: access_code || null,
-    deleted: null,
-  };
-
-  const createdCard = await creatorCardRepository.create(cardData);
-
-  return serializeCard(createdCard);
+  return result;
 }
 
 module.exports = createCreatorCard;

@@ -8,7 +8,7 @@ module.exports = createHandler({
   async handler(rc, helpers) {
     const { slug } = rc.params;
 
-    const card = await deleteCreatorCard(slug, rc.body);
+    const card = await deleteCreatorCard({ slug, ...rc.body });
     return {
       status: helpers.http_statuses.HTTP_200_OK,
       message: 'Creator Card Deleted Successfully.',

@@ -1,6 +1,8 @@
 /* eslint-disable camelcase */
 const validator = require('@app-core/validator');
 const { throwAppError } = require('@app-core/errors');
+const { appLogger } = require('@app-core/logger');
+const { CreatorCardMessages } = require('@app/messages');
 const creatorCardRepository = require('@app/repository/creator-card');
 
 const deleteCardSpec = `root {
@@ -14,23 +16,34 @@ function serializeCard(card) {
   return { id: _id, ...rest };
 }
 
-async function deleteCreatorCard(slug, data) {
-  validator.validate(data, parsedSpec);
+async function deleteCreatorCard(serviceData, options = {}) {
+  const { slug } = serviceData;
 
-  const card = await creatorCardRepository.findOne({ query: { slug, deleted: null } });
+  validator.validate(serviceData, parsedSpec);
 
-  if (!card) {
-    throwAppError('Creator card not found', 'NF01');
+  let result;
+
+  try {
+    const card = await creatorCardRepository.findOne({ query: { slug, deleted: null } });
+
+    if (!card) {
+      throwAppError(CreatorCardMessages.CARD_NOT_FOUND, 'NF01');
+    }
+
+    const deletedAt = Date.now();
+
+    await creatorCardRepository.updateOne({
+      query: { slug },
+      updateValues: { deleted: deletedAt },
+    });
+
+    result = serializeCard({ ...card, deleted: deletedAt });
+  } catch (error) {
+    appLogger.errorX(error, 'delete-creator-card-error');
+    throw error;
   }
 
-  const deletedAt = Date.now();
-
-  await creatorCardRepository.updateOne({
-    query: { slug },
-    updateValues: { deleted: deletedAt },
-  });
-
-  return serializeCard({ ...card, deleted: deletedAt });
+  return result;
 }
 
 module.exports = deleteCreatorCard;

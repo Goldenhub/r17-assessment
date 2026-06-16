@@ -10,7 +10,7 @@ module.exports = createHandler({
     const { slug } = rc.params;
     const { access_code } = rc.query;
 
-    const card = await getCreatorCard(slug, access_code);
+    const card = await getCreatorCard({ slug, access_code });
     return {
       status: helpers.http_statuses.HTTP_200_OK,
       message: 'Creator Card Retrieved Successfully.',
